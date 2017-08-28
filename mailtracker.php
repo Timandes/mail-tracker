@@ -108,4 +108,4 @@ function main($argc, $argv)
     return EXIT_SUCCESS;
 }
 
-exit(main($argc, $arvg));
+exit(main($argc, $argv));
