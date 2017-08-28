@@ -25,8 +25,10 @@ require_once __DIR__ . '/bootstrap.php';
 function mail_tracker_load_config_file()
 {
     $configPath = '/etc/mail-tracker.conf';
-    if (file_exists($configPath))
-        include $configPath;
+    if (!file_exists($configPath))
+        return;
+
+    include $configPath;
 
     foreach ($configs as $k => $v)
         $GLOBALS['gaSettings'][$k] = $v;
