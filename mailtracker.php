@@ -46,9 +46,11 @@ function mail_tracker_dependency_check()
 
 function mail_tracker_handle_one_message($messageId, $queueItemId)
 {
+    fprintf(STDOUT, "Found message=%s, item=%s, sending to remote server ...".PHP_EOL, $messageId, $queueItemId);
+
     $urlTemplate = $GLOBALS['gaSettings']['callback_url'];
     if (!$urlTemplate)
-        return;
+        throw new \RuntimeException("Empty 'callback_url' was found");
 
     $url = sprintf($urlTemplate, urlencode($messageId), urlencode($queueItemId));
 
