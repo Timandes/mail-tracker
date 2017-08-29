@@ -105,18 +105,18 @@ function mail_tracker_handle_one_line($line)
 {
     $parser = new \timandes\parser\MailLogParser();
     $obj = $parser->parse($line);
-    if ($obj->processName != 'cleanup')
-        return;
 
     if (!$obj->queueItemId)
         return;
 
-    if (preg_match('/message-id=<([^>]+)>/', $obj->Headermessage, $matches)) {
+    if ($obj->processName == 'cleanup'
+            && preg_match('/message-id=<([^>]+)>/', $obj->Headermessage, $matches)) {
         $messageId = $matches[1];
 
         fprintf(STDOUT, "Found message=%s, item=%s, saving mapping to item file ...".PHP_EOL, $messageId, $obj->queueItemId);
         mail_tracker_save_mapping_to_item_file($messageId, $obj->queueItemId);
-    } elseif ($obj->status) {
+    } elseif ($obj->processName == 'smtp'
+            && $obj->status) {
         fprintf(STDOUT, "Found item=%s, sending to remote server ...".PHP_EOL, $obj->queueItemId);
         $messageId = mail_tracker_get_message_id_from_item_file($obj->queueItemId);
         if (!$messageId) {
