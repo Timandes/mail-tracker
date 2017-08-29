@@ -75,7 +75,8 @@ function mail_tracker_save_mapping_to_item_file($messageId, $queueItemId)
     $path = mail_tracker_build_item_file_path($queueItemId);
     if (!file_exists($path)) {
         $dirPath = dirname($path);
-        mkdir($dirPath, 0777, true);
+        if (!file_exists($dirPath))
+            mkdir($dirPath, 0777, true);
 
         file_put_contents($path, $messageId);
         return;
