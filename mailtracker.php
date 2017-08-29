@@ -59,7 +59,7 @@ function mail_tracker_send_message_delivery_status($messageId, $obj)
         );
 
     $client = new GuzzleHttp\Client();
-    $client->request('POST', $url, $options);
+    $client->request('PUT', $url, $options);
 }
 
 function mail_tracker_build_item_file_path($queueItemId)
