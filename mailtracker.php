@@ -17,7 +17,8 @@ define('EXIT_FAILURE', 1);
 
 $GLOBALS['gaSettings'] = array(
         'verbose' => 3,
-        'callback_url' => 'http://localhost/rpc.php?m=%s&q=%s',
+        'callback_url' => 'http://localhost/rpc.php?m=%s',
+        'spool_dir' => '/var/spool/mailtracker',
     );
 
 require_once __DIR__ . '/bootstrap.php';
@@ -44,18 +45,56 @@ function mail_tracker_dependency_check()
     return true;
 }
 
-function mail_tracker_handle_one_message($messageId, $queueItemId)
+function mail_tracker_send_message_delivery_status($messageId, $obj)
 {
-    fprintf(STDOUT, "Found message=%s, item=%s, sending to remote server ...".PHP_EOL, $messageId, $queueItemId);
-
     $urlTemplate = $GLOBALS['gaSettings']['callback_url'];
     if (!$urlTemplate)
         throw new \RuntimeException("Empty 'callback_url' was found");
 
-    $url = sprintf($urlTemplate, urlencode($messageId), urlencode($queueItemId));
+    $url = sprintf($urlTemplate, urlencode($messageId));
+
+    $payload = json_decode(json_encode($obj), true);
+    $options = array(
+            'body' => http_build_query($payload),
+        );
 
     $client = new GuzzleHttp\Client();
-    $client->request('POST', $url);
+    $client->request('POST', $url, $options);
+}
+
+function mail_tracker_build_item_file_path($queueItemId)
+{
+    return $GLOBALS['gaSettings']['spool_dir']
+         . '/' . substr($queueItemId, 0, 1)
+         . '/' . substr($queueItemId, 1, 1)
+         . '/' . substr($queueItemId, 2);
+}
+
+function mail_tracker_save_mapping_to_item_file($messageId, $queueItemId)
+{
+    $path = mail_tracker_build_item_file_path($queueItemId);
+    if (!file_exists($path)) {
+        file_put_contents($path, $messageId);
+        return;
+    }
+
+    fprintf(STDOUT, "Item file %s exists".PHP_EOL, $path);
+    $messageIdInFile = mail_tracker_get_message_id_from_item_file($queueItemId);
+    if ($messageIdInFile != $messageId)
+        throw new \RuntimeException("Conflict item {$queueItemId} was found between {$messageIdInFile}(old) and {$messageId}(new)");
+}
+
+function mail_tracker_get_message_id_from_item_file($queueItemId)
+{
+    $path = mail_tracker_build_item_file_path($queueItemId);
+    if (!file_exists($path))
+        return null;
+
+    $r = file_get_contents($path);
+    if (!$r)
+        return null;
+
+    return trim($r);
 }
 
 function mail_tracker_handle_one_line($line)
@@ -68,12 +107,20 @@ function mail_tracker_handle_one_line($line)
     if (!$obj->queueItemId)
         return;
 
-    if (!preg_match('/message-id=<([^>]+)>/', $obj->Headermessage, $matches))
-        return;
+    if (preg_match('/message-id=<([^>]+)>/', $obj->Headermessage, $matches)) {
+        $messageId = $matches[1];
 
-    $messageId = $matches[1];
-
-    mail_tracker_handle_one_message($messageId, $obj->queueItemId);
+        fprintf(STDOUT, "Found message=%s, item=%s, saving mapping to item file ...".PHP_EOL, $messageId, $obj->queueItemId);
+        mail_tracker_save_mapping_to_item_file($messageId, $obj->queueItemId);
+    } elseif ($obj->status) {
+        fprintf(STDOUT, "Found item=%s, sending to remote server ...".PHP_EOL, $obj->queueItemId);
+        $messageId = mail_tracker_get_message_id_from_item_file($obj->queueItemId);
+        if (!$messageId) {
+            fprintf(STDERR, "Fail to find message ID from item file".PHP_EOL);
+            return;
+        }
+        mail_tracker_send_message_delivery_status($messageId, $obj);
+    }
 }
 
 function mail_tracker_event_handler_new_lines_arrived($ev)
