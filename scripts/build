@@ -1,0 +1,6 @@
+#! /bin/env php
+<?php
+$phar = new Phar('mailtracker.phar');
+$phar->buildFromDirectory(__DIR__.'/../', '/\.php$/');
+$phar->compressFiles(Phar::GZ);
+$phar->stopBuffering();
